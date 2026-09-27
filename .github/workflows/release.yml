@@ -162,6 +162,9 @@ jobs:
             --ks-key-alias "$KS_ALIAS" \
             --ks-pass env:KS_STOREPASS \
             --key-pass env:KS_KEYPASS \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
             --out dist/InstaLume.apk \
             dist/InstaLume-unsigned.apk
           echo "signing complete"
