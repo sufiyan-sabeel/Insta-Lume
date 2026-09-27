@@ -79,6 +79,8 @@ def main():
         stale = [n for n in names
                  if n == "META-INF/MANIFEST.MF" or n.startswith("META-INF/")
                  and n.endswith((".SF", ".RSA", ".DSA", ".EC"))]
+        signed = any(n.startswith("META-INF/")
+                     and n.endswith((".SF", ".RSA", ".DSA", ".EC")) for n in names)
         if stale:
             errors.append("stale signature entries present: " + ", ".join(stale))
         else:
@@ -138,7 +140,10 @@ def main():
         print("[skip] aapt2 not available")
 
     apksigner = shutil.which("apksigner")
-    if apksigner:
+    if apksigner and not signed:
+        print("[skip] apksigner: unsigned artifact (signature is verified "
+              "after the signing step instead)")
+    elif apksigner:
         try:
             out = subprocess.run([apksigner, "verify", "--verbose", apk],
                                  capture_output=True, text=True, timeout=600)

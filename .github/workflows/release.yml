@@ -58,12 +58,30 @@ jobs:
 
       - name: Download original APK (integrity pinned)
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           SOURCE_APK_URL: ${{ vars.SOURCE_APK_URL || 'https://github.com/sufiyan-sabeel/Insta-Lume/releases/download/source/InstaZen_438.0.0.28.88.apk' }}
         run: |
           set -euo pipefail
           mkdir -p build dist
           echo "Source: $SOURCE_APK_URL"
-          curl -fL --retry 3 --retry-delay 2 --connect-timeout 30 -o build/source.apk "$SOURCE_APK_URL"
+          # Release-asset CDN can lag right after upload -> retry, then fall
+          # back to the authenticated API asset route (same repository).
+          ok=0
+          for i in 1 2 3 4 5; do
+            rm -f build/source.apk
+            if curl -fL --connect-timeout 30 --max-time 900 \
+                 -o build/source.apk "$SOURCE_APK_URL"; then
+              ok=1; break
+            fi
+            echo "download attempt $i failed; retrying in 30s"
+            sleep 30
+          done
+          if [ "$ok" != 1 ]; then
+            echo "browser URL failed, trying API asset route"
+            AID="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/source" --jq '.assets[0].id')"
+            gh api -H "Accept: application/octet-stream" \
+              "repos/$GITHUB_REPOSITORY/releases/assets/$AID" -o build/source.apk
+          fi
           echo "${SOURCE_APK_SHA256}  build/source.apk" | sha256sum -c -
           echo "Source APK verified ($(stat -c %s build/source.apk) bytes)"
 
