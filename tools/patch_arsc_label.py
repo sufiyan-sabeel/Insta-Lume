@@ -41,7 +41,7 @@ def main():
     strcount, stylecount, flags, strstart, stylestart = struct.unpack_from('<IIIII', buf, poff + 8)
     if not (flags & 0x100):
         raise SystemExit('global pool is not UTF-8')
-    if flags & 0x8000:
+    if flags & 0x1:
         raise SystemExit('pool is sorted: index order would change')
     if stylecount:
         raise SystemExit('pool has style runs (not supported)')
@@ -66,12 +66,14 @@ def main():
     delta = len(new) - len(old)
     print(f'index={idx} hdr@0x{hdr:x} data@0x{data:x} delta={delta}')
 
+    # UTF-8 entry layout: [u8var utf16-len][u8var utf8-len][bytes][NUL]
+    # - exactly TWO length varints, then the payload (reading a third varint
+    #   would consume string data and report a bogus end position).
     (last_so,) = struct.unpack_from('<I', buf, offsets_at + (strcount - 1) * 4)
     last_hdr = strings_at + last_so
     _, p1 = read_u8_varint(buf, last_hdr)
-    _, p2 = read_u8_varint(buf, p1)
-    l8, p3 = read_u8_varint(buf, p2)
-    last_end = p3 + l8 + 1
+    l8, p2 = read_u8_varint(buf, p1)
+    last_end = p2 + l8 + 1
     slack = pool_end - last_end
     print(f'last string ends @0x{last_end:x}, pool ends @0x{pool_end:x}, slack={slack}')
     if delta > slack:
