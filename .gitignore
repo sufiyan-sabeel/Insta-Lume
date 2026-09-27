@@ -1,0 +1,28 @@
+# --- Signing material: NEVER commit ---
+signing/
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.pem
+*.key
+*.pk8
+*.bks
+
+# --- Build outputs: released via GitHub Releases, not committed ---
+dist/
+*.apk
+*.apks
+*.idsig
+*.idsig.zip
+
+# --- Extracted APK content (third-party binaries; keep out of git) ---
+app/
+InstaZen_*/
+
+# --- Tooling / OS noise ---
+__pycache__/
+*.pyc
+.DS_Store
+*.log
+.env
