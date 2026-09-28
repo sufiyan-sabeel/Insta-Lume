@@ -116,7 +116,10 @@ def main():
                     "META-INF/code_transparency_signed.jwt"}
             disk = {d for d in disk if d not in drop and not
                     (d.startswith("META-INF/") and d.endswith((".SF", ".RSA", ".DSA", ".EC")))}
-            archive = set(names)
+            # apksigner adds v1 (JAR) entries when signing; they exist only in
+            # the archive, so the same filter must be applied to BOTH sides.
+            archive = {n for n in names if n not in drop and not
+                       (n.startswith("META-INF/") and n.endswith((".SF", ".RSA", ".DSA", ".EC")))}
             missing = sorted(disk - archive)
             extra = sorted(archive - disk)
             if missing:
