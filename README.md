@@ -8,7 +8,7 @@ Created by **Umaiz Sufiyan**
 - GitHub: https://github.com/sufiyan-sabeel
 - Instagram: https://www.instagram.com/umaizsufiyan.78
 
-Version: **1.0** · base `438.0.0.28.88` · package `com.instazen.android`
+Version: **1.0.3** · base `438.0.0.28.88` · package `com.instazen.android`
 
 > Unofficial build. Not affiliated with, endorsed by or connected to
 > Meta/Instagram. InstaLume is a rebrand of the *InstaZen* mod by

@@ -26,20 +26,27 @@ exactly once (`string_ids[5067]`).
 
 The Dex2C string blob in `.data` is addressed **positionally**
 (base + offset / index); content is not hashed (verified: no Java-hash /
-FNV / CRC32 matches). Therefore only **same-length, whole-string,
-in-place** substitutions are allowed — `tools/patch_so_strings.py`
-enforces this and refuses anything else. File size is unchanged
+FNV / CRC32 matches). Therefore **whole-string, NUL-bounded** edits only —
+and length may change only under the stricter rule implemented by
+`tools/patch_so_blob.py`: a grown string must be paid for by the string
+directly after it shrinking by the same amount, so that the string count,
+the string order and the total `.data` byte length all stay identical and
+every *unpatched* string keeps its exact offset. File size is unchanged
 (34,572,840 bytes).
 
 ### 3a. Rebranding
 
-| Before | After | Bytes |
-|--------|-------|-------|
-| `InstaZen Settings` | `Lume Settings` (+ pad) | 17 |
-| `InstaZen V8.5` | `Lume V8.5` (+ pad) | 13 |
-| `InstaZen Testers` | `InstaLume Tester` | 16 |
-| `InstaZen` (standalone, date-label context) | `Lume` (+ pad) | 8 |
-| `Your support helps us keep InstaZen free & updated!` | `Your support helps keep InstaLume free & updated!` (+ pad) | 51 |
+| Before | After | Bytes | How |
+|--------|-------|-------|-----|
+| `InstaZen Settings` | `InstaLume Settings` | 17 → 18 | +1 paid for by `Contact Us` → `Reach out` (10 → 9) |
+| `Aman Ojha` | `Umaiz Sufiyan` | 9 → 13 | +4 paid for by `spoilertechuco@ybl` → `sufiyan-sabeel` (18 → 14) |
+| `InstaZen` (standalone, date-label context) | `InstaLume` | 8 → 9 | +1 paid for by `dd/MM hh:mm a` → `dd/MM hh:mma` (13 → 12) |
+| `Developed with ❤️ by Aman Ojha` | `Developed by Umaiz Sufiyan` (+ pad) | 34 | length-neutral |
+| `InstaZen V8.5` | `InstaLume 1.0` | 13 | exact |
+| ` V8.5` (About version suffix) | ` 1.0 ` | 5 | exact |
+| `InstaZen Testers` | `InstaLume Tester` | 16 | exact |
+| `Zen` (second half of the Settings/About brand line, rendered next to `Insta`) | `Lume` | 3 → 4 | +1 paid for by `APP CUSTOMIZATION` → `APP CUSTOMIZABLE` (17 → 16) — the header now reads `InstaLume 1.0` instead of `InstaZen 1.0` |
+| `Your support helps us keep InstaZen free & updated!` | `Your support helps keep InstaLume free & updated!` (+ pad) | 51 | length-neutral |
 
 ### 3b. PayPal / UPI removal (request: "remove paypal and upi")
 
@@ -90,10 +97,13 @@ Total bytes changed in the library: **351** (file size identical:
 
 ## 5. Known limitations
 
-1. **Short native branding is "Lume".** `InstaZen → InstaLume` grows every
-   string by one byte and the blob has zero slack (all strings are
-   NUL-tight), so the full name cannot be substituted in
-   `libinstazen.so`. Equal-length wording was used instead.
+1. **Full native rebrand achieved.** `InstaLume Settings`, `InstaLume`,
+   `Version 1.0` and `Umaiz Sufiyan` all fit: growth of the three visible
+   strings (+1 / +4 / +1 byte) is paid for by shrinking the string that
+   follows each of them, so the blob length, string count, string order and
+   every other offset are byte-identical to the original
+   (`tools/patch_so_blob.py` enforces this and prints every moved offset).
+   No shortened "Lume" branding remains anywhere.
 2. **Package name stays `com.instazen.android`** (required for upgrades
    and component binding).
 3. **Legacy paths keep the `InstaZen` folder name** so installed users'

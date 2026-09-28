@@ -29,6 +29,17 @@ python3 tools/patch_so_blob.py "$SO" \
   --replace 'Aman Ojha' 'Umaiz Sufiyan' --replace 'spoilertechuco@ybl' 'sufiyan-sabeel' \
   --replace 'InstaZen' 'InstaLume' --replace 'dd/MM hh:mm a' 'dd/MM hh:mma'
 
+# 4b. Settings/About header: the brand name is stored as TWO separate strings
+#     ('Insta' + 'Zen') that the screen joins, so the header still rendered
+#     "InstaZen 1.0" after step 4 (which only rewrites the standalone
+#     'InstaZen' used by the date label).  Make the second half read 'Lume';
+#     the +1 byte is paid for by the section header that directly follows
+#     'Zen' losing one byte - they are one contiguous run, so every other
+#     offset stays identical (enforced by patch_so_blob.py).
+python3 tools/patch_so_blob.py "$SO" \
+  --replace 'Zen' 'Lume' \
+  --replace 'APP CUSTOMIZATION' 'APP CUSTOMIZABLE'
+
 # 5. Cosmetic swaps: strictly same length (padded where shorter) -> no movement.
 python3 tools/patch_so_strings.py "$SO" --pad \
   --replace 'PayPal' 'GitHub' \

@@ -98,6 +98,14 @@ jobs:
           #  so every other offset in libinstazen.so stays identical).
           bash tools/patch_all_branding.sh build/work
 
+      - name: Set app version from tag (versionName + versionCode bump)
+        run: |
+          set -euo pipefail
+          # tag v1.0.3 -> versionName 1.0.1-style string "1.0.3";
+          # versionCode is incremented from whatever the source APK carries.
+          V="${GITHUB_REF_NAME#v}"
+          python3 tools/patch_manifest_version.py build/work/AndroidManifest.xml "$V"
+
       - name: Build APK
         run: python3 tools/build_apk.py build/work dist/InstaLume-unsigned.apk
 
@@ -111,6 +119,24 @@ jobs:
 
       - name: Validate rebuilt APK (fails job on error)
         run: python3 tools/validate_apk.py dist/InstaLume-aligned.apk build/work
+
+      - name: Assert version & ABI match the tag (fails job on error)
+        run: |
+          set -euo pipefail
+          V="${GITHUB_REF_NAME#v}"
+          BADGING="$(aapt2 dump badging dist/InstaLume-aligned.apk 2>/dev/null | grep -E '^(package|application-label:)' | head -n 2)"
+          echo "$BADGING"
+          echo "$BADGING" | grep -q "versionName='$V'" \
+            || { echo "::error::versionName is not $V"; exit 1; }
+          echo "$BADGING" | grep -q "versionCode='1000000000'" \
+            || { echo "::error::versionCode was not bumped past 999999999"; exit 1; }
+          echo "$BADGING" | grep -q "application-label:'InstaLume'" \
+            || { echo "::error::launcher label is not InstaLume"; exit 1; }
+          # arm64-v8a only: no other ABI may be packaged
+          ABIS="$(unzip -l dist/InstaLume-aligned.apk | awk '{print $4}' | grep '^lib/' | cut -d/ -f2 | sort -u)"
+          echo "ABIs: $ABIS"
+          [ "$ABIS" = "arm64-v8a" ] || { echo "::error::expected arm64-v8a only"; exit 1; }
+          echo "version $V, versionCode 1000000000, label InstaLume, ABI arm64-v8a OK"
 
       - name: Decode release keystore from secrets
         env:
@@ -227,7 +253,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: InstaLume ${{ github.ref_name }}
+          name: InstaLume ${{ github.ref_name }} — ARM64
           body_path: dist/release-notes.md
           files: dist/InstaLume-${{ github.ref_name }}.apk
           fail_on_unmatched_files: true

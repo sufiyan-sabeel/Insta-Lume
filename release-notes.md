@@ -1,4 +1,4 @@
-# InstaLume v1.0.1
+# InstaLume v1.0.3
 
 InstaLume is a customized Instagram client experience with additional
 user-focused features and customization.
@@ -10,6 +10,13 @@ user-focused features and customization.
 
 ## What's in this release
 
+- **Version metadata fixed:** the manifest now reports `versionName 1.0.3`
+  and `versionCode 1000000000` (it used to carry the upstream Instagram
+  `438.0.0.28.88` / `999999999`), so Android accepts it as a normal
+  upgrade.
+- **Settings/About header fixed:** the brand line is stored as two separate
+  strings (`Insta` + `Zen`) and shown joined — it now renders
+  **InstaLume 1.0** instead of *InstaZen 1.0*.
 - **Complete visible rebrand:** Settings header now reads
   *InstaLume Settings*, the About/credits screens show *InstaLume*,
   *Version 1.0* and *Created by Umaiz Sufiyan* — no user-visible
@@ -30,7 +37,7 @@ user-focused features and customization.
 
 ## Installation
 
-1. Download `InstaLume-v1.0.1.apk` from this release.
+1. Download `InstaLume-v1.0.3.apk` from this release.
 2. Install it on an Android device (arm64-v8a). Allow installation from
    unknown sources when prompted.
 3. Signed with the stable InstaLume release key — updates with the same
