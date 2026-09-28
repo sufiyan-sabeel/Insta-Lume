@@ -101,10 +101,17 @@ jobs:
       - name: Set app version from tag (versionName + versionCode bump)
         run: |
           set -euo pipefail
-          # tag v1.0.3 -> versionName 1.0.1-style string "1.0.3";
-          # versionCode is incremented from whatever the source APK carries.
+          # tag v1.0.4 -> versionName "1.0.4".
+          # versionCode must be strictly higher than every published build so
+          # Android treats the release as an upgrade (source carries
+          # 999999999; v1.0.3 shipped as 1000000000).  Encode the patch
+          # digit: 1.0.4 -> 1000000004.
           V="${GITHUB_REF_NAME#v}"
-          python3 tools/patch_manifest_version.py build/work/AndroidManifest.xml "$V"
+          PATCH="${V##*.}"
+          case "$PATCH" in ''|*[!0-9]*) echo "::error::tag '$GITHUB_REF_NAME' has no numeric patch"; exit 1;; esac
+          VC=$((1000000000 + 10#$PATCH))
+          echo "versionName=$V versionCode=$VC"
+          python3 tools/patch_manifest_version.py build/work/AndroidManifest.xml "$V" "$VC"
 
       - name: Build APK
         run: python3 tools/build_apk.py build/work dist/InstaLume-unsigned.apk
@@ -124,19 +131,48 @@ jobs:
         run: |
           set -euo pipefail
           V="${GITHUB_REF_NAME#v}"
-          BADGING="$(aapt2 dump badging dist/InstaLume-aligned.apk 2>/dev/null | grep -E '^(package|application-label:)' | head -n 2)"
+          PATCH="${V##*.}"
+          VC=$((1000000000 + 10#$PATCH))
+          BADGING="$(aapt2 dump badging dist/InstaLume-aligned.apk 2>/dev/null | grep -E '^(package|application-label:|minSdkVersion|targetSdkVersion)' | head -n 4)"
           echo "$BADGING"
           echo "$BADGING" | grep -q "versionName='$V'" \
             || { echo "::error::versionName is not $V"; exit 1; }
-          echo "$BADGING" | grep -q "versionCode='1000000000'" \
-            || { echo "::error::versionCode was not bumped past 999999999"; exit 1; }
+          echo "$BADGING" | grep -q "versionCode='$VC'" \
+            || { echo "::error::versionCode is not $VC"; exit 1; }
+          echo "$BADGING" | grep -q "name='com.instazen.android'" \
+            || { echo "::error::package name drifted"; exit 1; }
           echo "$BADGING" | grep -q "application-label:'InstaLume'" \
             || { echo "::error::launcher label is not InstaLume"; exit 1; }
-          # arm64-v8a only: no other ABI may be packaged
+          echo "$BADGING" | grep -q "minSdkVersion:'28'" \
+            || { echo "::error::minSdk must stay 28 (no compatibility downgrade/upgrade)"; exit 1; }
+          echo "$BADGING" | grep -Eq "targetSdkVersion:'3[56]'" \
+            || { echo "::error::targetSdk must be 35 or 36"; exit 1; }
+          # arm64-v8a only: no other ABI may be packaged, and every packaged
+          # native library must be a real AArch64 ELF (catches truncation /
+          # corruption = the "problem parsing the package" class of failures)
           ABIS="$(unzip -l dist/InstaLume-aligned.apk | awk '{print $4}' | grep '^lib/' | cut -d/ -f2 | sort -u)"
           echo "ABIs: $ABIS"
           [ "$ABIS" = "arm64-v8a" ] || { echo "::error::expected arm64-v8a only"; exit 1; }
-          echo "version $V, versionCode 1000000000, label InstaLume, ABI arm64-v8a OK"
+          python3 - <<'PY'
+          import sys, zipfile, struct
+          from collections import Counter
+          z = zipfile.ZipFile("dist/InstaLume-aligned.apk")
+          bad = z.testzip()
+          if bad: sys.exit(f"::error::corrupt zip entry {bad}")
+          names = z.namelist()
+          dupes = sorted(n for n, c in Counter(names).items() if c > 1)
+          if dupes: sys.exit(f"::error::duplicate zip entries: {dupes[:5]}")
+          so = [n for n in names if n.endswith(".so")]
+          if not so: sys.exit("::error::no native libraries packaged")
+          for n in so:
+              h = z.read(n)
+              if h[:4] != b"\x7fELF" or len(h) < 64:
+                  sys.exit(f"::error::{n} is not a complete ELF")
+              if struct.unpack_from("<H", h, 18)[0] != 183:  # EM_AARCH64
+                  sys.exit(f"::error::{n} is not AArch64")
+          print(f"ELF check OK: {len(so)} AArch64 .so, no duplicate/corrupt entries")
+          PY
+          echo "version $V, versionCode $VC, label InstaLume, ABI arm64-v8a OK"
 
       - name: Decode release keystore from secrets
         env:
