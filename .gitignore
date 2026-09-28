@@ -26,3 +26,6 @@ __pycache__/
 .DS_Store
 *.log
 .env
+
+# --- Local extraction / scratch build tree ---
+build/

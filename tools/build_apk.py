@@ -6,7 +6,10 @@ Rules applied (mirroring what aapt2/zipalign produce for a real APK):
 * stale signature files from the previous APK are dropped
   (META-INF/MANIFEST.MF, *.SF, *.RSA, *.DSA, *.EC, INDEX.LIST)
 * resources.arsc is stored (not deflated) and 4-byte aligned
-* native libraries (lib/**/*.so) are stored and 4096-byte aligned
+* native libraries (lib/**/*.so) are deflated - exactly like the original
+  source APK (they are extracted at install time: extractNativeLibs=true).
+  Storing them uncompressed would additionally require surviving the
+  apksigner zip rewrite with perfect 4096 alignment, which is fragile.
 * everything else is deflated
 * timestamps are fixed so builds are reproducible
 
@@ -19,9 +22,9 @@ import sys
 import zipfile
 
 STORED_ARSC_ALIGN = 4
-STORED_LIB_ALIGN = 4096
 
-DROP_NAMES = {"META-INF/MANIFEST.MF", "META-INF/INDEX.LIST"}
+DROP_NAMES = {"META-INF/MANIFEST.MF", "META-INF/INDEX.LIST",
+              "META-INF/code_transparency_signed.jwt"}
 DROP_SUFFIXES = (".SF", ".RSA", ".DSA", ".EC")
 
 
@@ -98,8 +101,6 @@ def main():
             align = 0
             if rel == "resources.arsc":
                 stored, align = True, STORED_ARSC_ALIGN
-            elif rel.startswith("lib/") and rel.endswith(".so"):
-                stored, align = True, STORED_LIB_ALIGN
 
             zi = zipfile.ZipInfo(rel, date_time=(1980, 1, 1, 0, 0, 0))
             zi.create_system = 3

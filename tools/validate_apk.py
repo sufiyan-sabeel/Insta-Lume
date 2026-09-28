@@ -81,7 +81,14 @@ def main():
                  and n.endswith((".SF", ".RSA", ".DSA", ".EC"))]
         signed = any(n.startswith("META-INF/")
                      and n.endswith((".SF", ".RSA", ".DSA", ".EC")) for n in names)
-        if stale:
+        if signed:
+            # apksigner's own v1 entries are expected on a signed artifact;
+            # their validity is enforced by the apksigner verify below.
+            if "META-INF/MANIFEST.MF" not in names:
+                errors.append("signature entries present but META-INF/MANIFEST.MF missing")
+            else:
+                print("[ok] signed artifact (v1 entries present, verified below)")
+        elif stale:
             errors.append("stale signature entries present: " + ", ".join(stale))
         else:
             print("[ok] no stale signature entries")
@@ -105,7 +112,8 @@ def main():
             for root, _, files in os.walk(src):
                 for f in files:
                     disk.add(os.path.relpath(os.path.join(root, f), src).replace(os.sep, "/"))
-            drop = {"META-INF/MANIFEST.MF", "META-INF/INDEX.LIST"}
+            drop = {"META-INF/MANIFEST.MF", "META-INF/INDEX.LIST",
+                    "META-INF/code_transparency_signed.jwt"}
             disk = {d for d in disk if d not in drop and not
                     (d.startswith("META-INF/") and d.endswith((".SF", ".RSA", ".DSA", ".EC")))}
             archive = set(names)
@@ -152,8 +160,13 @@ def main():
             else:
                 lines = [l for l in out.stdout.splitlines() if "Verified using" in l or l.startswith("Verifies")]
                 print("[ok] apksigner verify: " + ("; ".join(lines) or "passed"))
+                if not any("Verified using v3 scheme" in l and l.rstrip().endswith("true")
+                           for l in out.stdout.splitlines()):
+                    errors.append("apksigner verify: v3 scheme not verified (required for minSdk 28)")
         except Exception as exc:  # noqa: BLE001
             errors.append(f"apksigner validation error: {exc}")
+    elif signed:
+        errors.append("signed artifact but apksigner is not available to verify it")
     else:
         print("[skip] apksigner not available")
 

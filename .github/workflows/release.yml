@@ -3,10 +3,12 @@ name: Build, sign & release APK
 # Releases are produced entirely in CI:
 #   1. download the unmodified original APK (SHA-256 pinned)
 #   2. apply the InstaLume branding patches (content-based, length-safe)
-#   3. rebuild the APK (alignment-preserving repack)
-#   4. sign it with the release key kept in GitHub Actions secrets
-#   5. verify the signature (job fails if signing/verification fails)
-#   6. publish ONLY the signed APK to the GitHub Release
+#   3. rebuild the APK (resources.arsc stored + 4-byte aligned, libs deflated)
+#   4. zipalign -f -p 4, then validate the result
+#   5. sign it with the release key kept in GitHub Actions secrets
+#   6. verify the signature + re-validate the final artifact
+#      (job fails if any check fails)
+#   7. publish ONLY the signed APK to the GitHub Release
 #
 # Required repository secrets (values are never printed):
 #   INSTA_LUME_KEYSTORE_BASE64  base64 of the release keystore (never committed)
@@ -91,47 +93,24 @@ jobs:
       - name: Apply InstaLume branding patches
         run: |
           set -euo pipefail
-          W=build/work
-
-          # 1. Launcher label: unique resources.arsc pool string
-          python3 tools/patch_arsc_label.py "$W/resources.arsc" InstaZen InstaLume
-
-          # 2. Crash toast (dex string, equal length: 59 bytes)
-          python3 tools/patch_dex_string.py "$W/classes21.dex" \
-            'InstaZen has crashed. Please share the crash log via Gmail.' \
-            'InstaLume has crashed. Please share the crash log via Gmail'
-
-          # 3. Native library: strictly same-length, whole-string, in-place swaps
-          #    (the Dex2C string blob is addressed positionally - length must not change)
-          python3 tools/patch_so_strings.py "$W/lib/arm64-v8a/libinstazen.so" \
-            --replace 'https://www.paypal.com/paypalme/SpoilerTech' \
-                      'http://github.com/sufiyan-sabeel/Insta-Lume' \
-            --replace 'https://raw.githubusercontent.com/SpoilerTech/InstaZen/refs/heads/main/Donations.json' \
-                      'https://raw.githubusercontent.com/sufiyan-sabeel/Insta-Lume/main/Donations-empty.json'
-
-          python3 tools/patch_so_strings.py "$W/lib/arm64-v8a/libinstazen.so" --pad \
-            --replace 'PayPal' 'GitHub' \
-            --replace 'UPI ID' 'Handle' \
-            --replace 'UPI ID copied! Open any UPI app to pay' 'Link copied! Open it in your browser.' \
-            --replace 'spoilertechuco@ybl' 'sufiyan-sabeel' \
-            --replace 'spoilertechuco@ybl (Tap to copy)' 'sufiyan-sabeel (Tap to copy)' \
-            --replace 'Cannot open PayPal' 'Cannot open link' \
-            --replace 'UPI data not loaded' 'Nothing to show' \
-            --replace 'PayPal ID Copied' 'Link copied!' \
-            --replace 'PayPal link not loaded yet' 'Link not loaded yet' \
-            --replace 'UPI Payment' 'Payment' \
-            --replace 'com.paypal.android.p2pmobile' 'com.instalume.disabled.shell' \
-            --replace 'InstaZen Testers' 'InstaLume Tester' \
-            --replace 'InstaZen V8.5' 'Lume V8.5' \
-            --replace 'InstaZen Settings' 'Lume Settings' \
-            --replace 'Your support helps us keep InstaZen free & updated!' 'Your support helps keep InstaLume free & updated!' \
-            --replace 'InstaZen' 'Lume'
+          # Launcher label, dex crash toast, native Settings/About branding
+          # (balanced .data patches: growth paid for by the adjacent string,
+          #  so every other offset in libinstazen.so stays identical).
+          bash tools/patch_all_branding.sh build/work
 
       - name: Build APK
         run: python3 tools/build_apk.py build/work dist/InstaLume-unsigned.apk
 
+      - name: Zipalign (BUILD -> ZIPALIGN -> SIGN -> VERIFY)
+        run: |
+          set -euo pipefail
+          command -v zipalign >/dev/null 2>&1 || { echo "::error::zipalign not found in PATH"; exit 1; }
+          zipalign -f -p 4 dist/InstaLume-unsigned.apk dist/InstaLume-aligned.apk
+          zipalign -c -p 4 dist/InstaLume-aligned.apk
+          echo "zipalign -c -p 4 OK"
+
       - name: Validate rebuilt APK (fails job on error)
-        run: python3 tools/validate_apk.py dist/InstaLume-unsigned.apk build/work
+        run: python3 tools/validate_apk.py dist/InstaLume-aligned.apk build/work
 
       - name: Decode release keystore from secrets
         env:
@@ -166,16 +145,26 @@ jobs:
             --v2-signing-enabled true \
             --v3-signing-enabled true \
             --out dist/InstaLume.apk \
-            dist/InstaLume-unsigned.apk
+            dist/InstaLume-aligned.apk
           echo "signing complete"
 
       - name: Verify signature (fails job on error)
         run: |
           set -euo pipefail
-          apksigner verify --verbose --print-certs dist/InstaLume.apk
-          # never publish an unsigned artifact
-          rm -f dist/InstaLume-unsigned.apk
+          OUT="$(apksigner verify --verbose --print-certs dist/InstaLume.apk)"
+          echo "$OUT"
+          # v3 governs minSdk 28+ devices - must be verified
+          echo "$OUT" | grep -qE "Verified using v3 scheme.*: true"
+          # v2 block must also verify for API 24-27 range
+          apksigner verify --min-sdk-version 24 --max-sdk-version 27 dist/InstaLume.apk
+          echo "v3 verified (default min-sdk 28); v2 verified (24-27 range)"
+          # full structural re-validation of the FINAL signed artifact
+          # (zip integrity, entry set, arsc 4-alignment, aapt2 parse, apksigner)
+          python3 tools/validate_apk.py dist/InstaLume.apk build/work
+          # never publish intermediates
+          rm -f dist/InstaLume-unsigned.apk dist/InstaLume-aligned.apk
           test ! -e dist/InstaLume-unsigned.apk
+          test ! -e dist/InstaLume-aligned.apk
 
       - name: Collect build metadata
         id: meta
