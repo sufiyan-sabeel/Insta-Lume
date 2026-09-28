@@ -158,6 +158,21 @@ jobs:
           # v2 block must also verify for API 24-27 range
           apksigner verify --min-sdk-version 24 --max-sdk-version 27 dist/InstaLume.apk
           echo "v3 verified (default min-sdk 28); v2 verified (24-27 range)"
+          # zipalign re-check on the SIGNED artifact: every stored entry must
+          # still be 4-aligned and stored .so page-aligned after signing
+          command -v zipalign > /dev/null
+          zipalign -c -p 4 dist/InstaLume.apk
+          echo "zipalign -c -p 4 OK on signed APK"
+          # zip container integrity of the FINAL artifact
+          unzip -t dist/InstaLume.apk > /dev/null
+          echo "unzip -t OK on signed APK"
+          # aapt2 must parse the FINAL artifact's manifest/resources
+          command -v aapt2 > /dev/null
+          aapt2 dump badging dist/InstaLume.apk > /tmp/badging-final.txt
+          head -n 3 /tmp/badging-final.txt
+          grep -q "package: name='com.instazen.android'" /tmp/badging-final.txt
+          grep -q "application-label:'InstaLume'" /tmp/badging-final.txt
+          echo "aapt2 badging OK on signed APK"
           # full structural re-validation of the FINAL signed artifact
           # (zip integrity, entry set, arsc 4-alignment, aapt2 parse, apksigner)
           python3 tools/validate_apk.py dist/InstaLume.apk build/work
