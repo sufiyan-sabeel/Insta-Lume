@@ -55,7 +55,16 @@ python3 tools/patch_so_strings.py "$SO" --pad \
   --replace 'InstaZen Testers' 'InstaLume Tester' \
   --replace 'InstaZen V8.5' 'InstaLume 1.0' \
   --replace ' V8.5' ' 1.0 ' \
-  --replace 'Your support helps us keep InstaZen free & updated!' 'Your support helps keep InstaLume free & updated!'
+  --replace 'Your support helps us keep InstaZen free & updated!' 'Your support helps keep InstaLume free & updated!' \
+  --replace 'SpoilerTech (Tap to open)' 'InstaLume (Tap to open)' \
+  --replace 'Owner & Modder' 'Creator'
+
+# 5b. Creator's Instagram profile (About credit row).  Exact length on
+#     purpose: this is a URL, so it must never be space-padded - hence a
+#     separate invocation WITHOUT --pad.  37 bytes -> 37 bytes.
+python3 tools/patch_so_strings.py "$SO" \
+  --replace 'instagram://user?username=SpoilerTech' \
+            'https://instagram.com/umaizsufiyan.78'
 
 # 6. About credit line (string stores a supplementary emoji as CESU-8 surrogate
 #    pairs, so it is patched byte-wise rather than through argv).
@@ -85,7 +94,12 @@ open(path, 'wb').write(bytes(buf))
 print(f"  {old!r} -> {new!r} at 0x{hits[0]:x}")
 PY
 
-# 7. Code-transparency JWT was signed over the ORIGINAL app content and no
+# 7. Launcher icon: replace the Instagram artwork with InstaLume art by
+#    swapping image bytes at the same resource paths (resource IDs, the
+#    adaptive-icon XML and resources.arsc are untouched).
+python3 tools/patch_icons.py "$W"
+
+# 8. Code-transparency JWT was signed over the ORIGINAL app content and no
 #    longer matches this build (never required for installation).
 rm -f "$W/META-INF/code_transparency_signed.jwt"
 

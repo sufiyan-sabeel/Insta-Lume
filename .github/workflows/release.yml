@@ -98,19 +98,40 @@ jobs:
           #  so every other offset in libinstazen.so stays identical).
           bash tools/patch_all_branding.sh build/work
 
-      - name: Set app version from tag (versionName + versionCode bump)
+      - name: Set app version from tag (versionName + monotonic versionCode)
         run: |
           set -euo pipefail
-          # tag v1.0.4 -> versionName "1.0.4".
-          # versionCode must be strictly higher than every published build so
-          # Android treats the release as an upgrade (source carries
-          # 999999999; v1.0.3 shipped as 1000000000).  Encode the patch
-          # digit: 1.0.4 -> 1000000004.
+          # tag v1.0.2 -> versionName "1.0.2".
+          #
+          # versionCode MUST be strictly higher than every published build or
+          # Android refuses the install with INSTALL_FAILED_VERSION_DOWNGRADE.
+          # The first releases used 1000000000+patch, so:
+          #   v1.0.1 -> 1000000001, v1.0.3 -> 1000000003, v1.0.4 -> 1000000004
+          # A new scheme therefore starts a fresh, higher series that still
+          # increases monotonically with the version:
+          #   versionCode = 2000000000 + (MAJOR-1)*1000000
+          #                            + MINOR*1000 + PATCH
+          #   v1.0.2 -> 2000000002   (> 1000000004, so 1.0.2 installs over 1.0.4)
+          #   v1.0.10 -> 2000000010, v1.1.0 -> 2000001000, v2.0.0 -> 2001000000
           V="${GITHUB_REF_NAME#v}"
-          PATCH="${V##*.}"
-          case "$PATCH" in ''|*[!0-9]*) echo "::error::tag '$GITHUB_REF_NAME' has no numeric patch"; exit 1;; esac
-          VC=$((1000000000 + 10#$PATCH))
+          case "$V" in
+            *.*) ;;
+            *) echo "::error::tag '$GITHUB_REF_NAME' is not a dotted version"; exit 1;;
+          esac
+          MAJOR="${V%%.*}"; REST="${V#*.}"; MINOR="${REST%%.*}"; PATCH="${REST#*.}"
+          case "$MAJOR$MINOR$PATCH" in ''|*[!0-9]*) echo "::error::non-numeric version '$V'"; exit 1;; esac
+          VC=$((2000000000 + (10#$MAJOR - 1) * 1000000 + 10#$MINOR * 1000 + 10#$PATCH))
+          if [ "$VC" -le 1000000004 ]; then
+            echo "::error::versionCode $VC would be a downgrade (1.0.4 shipped as 1000000004)"
+            exit 1
+          fi
+          if [ "$VC" -gt 2100000000 ]; then
+            echo "::error::versionCode $VC exceeds the safe int32 range"
+            exit 1
+          fi
           echo "versionName=$V versionCode=$VC"
+          echo "VERSION_NAME=$V" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$VC" >> "$GITHUB_ENV"
           python3 tools/patch_manifest_version.py build/work/AndroidManifest.xml "$V" "$VC"
 
       - name: Build APK
@@ -130,9 +151,8 @@ jobs:
       - name: Assert version & ABI match the tag (fails job on error)
         run: |
           set -euo pipefail
-          V="${GITHUB_REF_NAME#v}"
-          PATCH="${V##*.}"
-          VC=$((1000000000 + 10#$PATCH))
+          V="$VERSION_NAME"
+          VC="$VERSION_CODE"
           BADGING="$(aapt2 dump badging dist/InstaLume-aligned.apk 2>/dev/null | grep -E '^(package|application-label:|minSdkVersion|targetSdkVersion)' | head -n 4)"
           echo "$BADGING"
           echo "$BADGING" | grep -q "versionName='$V'" \
@@ -283,7 +303,7 @@ jobs:
             echo "- **Git commit:** \`${GITHUB_SHA}\`"
             echo "- **Workflow run:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           } > dist/release-notes.md
-          mv dist/InstaLume.apk "dist/InstaLume-${TAG}.apk"
+          mv dist/InstaLume.apk "dist/InstaLume-${TAG}-arm64.apk"
 
       - name: Publish GitHub Release (signed APK only)
         uses: softprops/action-gh-release@v2
@@ -291,7 +311,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: InstaLume ${{ github.ref_name }} — ARM64
           body_path: dist/release-notes.md
-          files: dist/InstaLume-${{ github.ref_name }}.apk
+          files: dist/InstaLume-${{ github.ref_name }}-arm64.apk
           fail_on_unmatched_files: true
           draft: false
           prerelease: false
