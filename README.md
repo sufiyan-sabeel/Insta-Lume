@@ -8,7 +8,7 @@ Created by **Umaiz Sufiyan**
 - GitHub: https://github.com/sufiyan-sabeel
 - Instagram: https://www.instagram.com/umaizsufiyan.78
 
-Version: **1.0.2** · base `438.0.0.28.88` · package `com.instazen.android`
+Version: **1.1.0** · base `438.0.0.28.88` · package `com.instazen.android`
 
 > Unofficial build. Not affiliated with, endorsed by or connected to
 > Meta/Instagram. InstaLume is a rebrand of the *InstaZen* mod by
@@ -62,11 +62,11 @@ update `SOURCE_APK_SHA256` in `.github/workflows/release.yml`.
 ### Cutting a release
 
 ```bash
-git tag v1.0.2
-git push origin v1.0.2
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
-The workflow run ends with a release containing `InstaLume-v1.0.2-arm64.apk`,
+The workflow run ends with a release containing `InstaLume-v1.1.0-arm64.apk`,
 its SHA-256, size, package name and build status in the notes.
 
 `versionCode` is derived from the tag by
