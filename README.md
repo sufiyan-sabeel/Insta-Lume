@@ -119,3 +119,8 @@ are never printed by the workflow):
 See [docs/branding-audit.md](docs/branding-audit.md) for the complete list
 of rebranded strings and the identifiers deliberately left untouched
 (package name, JNI symbols, preferences, file paths, resource IDs).
+
+## License
+
+InstaLume is released under the **GNU General Public License v3.0**.
+Copyright (C) 2026 Umaiz Sufiyan. See [LICENSE](LICENSE) for the full text.
