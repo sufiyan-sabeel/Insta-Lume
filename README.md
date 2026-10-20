@@ -124,3 +124,7 @@ of rebranded strings and the identifiers deliberately left untouched
 
 InstaLume is released under the **GNU General Public License v3.0**.
 Copyright (C) 2026 Umaiz Sufiyan. See [LICENSE](LICENSE) for the full text.
+
+The original build tooling in [`tools/`](tools/) — the Python and shell
+patchers written for this project — is released separately under the
+**MIT License**. See [`tools/LICENSE`](tools/LICENSE).
