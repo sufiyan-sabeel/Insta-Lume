@@ -1,0 +1,7 @@
+# robots.txt for the InstaLume site
+# https://sufiyan-sabeel.github.io/Insta-Lume/
+
+User-agent: *
+Allow: /
+
+Sitemap: https://sufiyan-sabeel.github.io/Insta-Lume/sitemap.xml
